@@ -212,9 +212,7 @@ jobs:
             echo "===> /usr/local/etc/poudriere.conf"
             cat /usr/local/etc/poudriere.conf
 
-            # avoid crushing guest OS due to running out of disk space and
-            # memory
-            MAX_JOBS=1
+            MAX_JOBS=2
 
             # avoid "fatal: detected dubious ownership in repository at ..."
             sudo chown -R root:wheel "${OVERLAY_DIR}"
