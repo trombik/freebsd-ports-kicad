@@ -1,0 +1,83 @@
+---
+name: Look for changed ports and built them
+on:
+  - push
+
+jobs:
+  list-ports:
+    runs-on: ubuntu-latest
+    outputs:
+      PORTS_TO_BUILD: ${{ steps.conclude-port-to-build.outputs.PORTS_TO_BUILD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Filter changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          list-files: shell
+          filters: |
+            ports-to-build:
+              - "[0-9a-zA-Z]*/**"
+            ci:
+              - ".github/workflows/*.yml"
+
+      - name: List CI files
+        if: steps.filter.outputs.ci == 'true'
+        id: build-all-ports
+        shell: sh
+        run: |
+          echo "steps.filter.outputs.ci_files: '${{ steps.filter.outputs.ci_files }}'"
+          echo "::notice ::Building all the ports in the repository"
+
+          # find ports in the repository and make it a list of one line
+          # separated by a space.
+          PORTS_TO_BUILD=`find * -type d -maxdepth 1 -mindepth 1 | tr '\n' ' ' | sed -e 's/ $//'`
+
+          # pass the JSON to other jobs
+          echo "PORTS_TO_BUILD=${PORTS_TO_BUILD}" >> "${GITHUB_OUTPUT}"
+          cat "${GITHUB_OUTPUT}"
+
+      - name: List changed ports
+        if: steps.filter.outputs.ports-to-build == 'true' && steps.filter.outputs.ci != 'true'
+        id: list-ports-to-build
+        shell: sh
+        run: |
+          echo "steps.filter.outputs.ports-to-build_files: '${{ steps.filter.outputs.ports-to-build_files }}'"
+
+          # find changed ports in the repository and make it a list of one
+          # line separated by a space.
+          for F in ${{ steps.filter.outputs.ports-to-build_files }}; do
+            PORTS_TO_BUILD="${PORTS_TO_BUILD} `echo ${F} | cut -f 1,2 -d '/' | grep '/'`"
+          done
+
+          # make unique list
+          PORTS_TO_BUILD=`echo ${PORTS_TO_BUILD} | tr ' ' '\n' | sort -u`
+          echo "sorted PORTS_TO_BUILD: ${PORTS_TO_BUILD}"
+          PORTS_TO_BUILD=`echo ${PORTS_TO_BUILD} | tr '\n' ' ' | sed -e 's/ $//'`
+          echo "::notice ::Building ${PORTS_TO_BUILD}"
+
+          # pass the JSON to other jobs
+          echo "PORTS_TO_BUILD=${PORTS_TO_BUILD}" >> "${GITHUB_OUTPUT}"
+          cat "${GITHUB_OUTPUT}"
+
+      - name: Conclude PORTS_TO_BUILD
+        shell: sh
+        id: conclude-port-to-build
+        run: |
+          PORTS_TO_BUILD=""
+          if [ ! -z "${{ steps.build-all-ports.outputs.PORTS_TO_BUILD }}" ]; then
+            PORTS_TO_BUILD="${{ steps.build-all-ports.outputs.PORTS_TO_BUILD }}"
+          elif [ ! -z "${{ steps.list-ports-to-build.outputs.PORTS_TO_BUILD }}" ]; then
+            PORTS_TO_BUILD="${{ steps.list-ports-to-build.outputs.PORTS_TO_BUILD }}"
+          fi
+          echo "PORTS_TO_BUILD=${PORTS_TO_BUILD}" >> "${GITHUB_OUTPUT}"
+          cat "${GITHUB_OUTPUT}"
+
+  build-ports:
+    name: Build ports (1st run)
+    needs: list-ports
+    uses: ./.github/workflows/poudriere.yml
+    with:
+      ports-to-build: ${{ needs.list-ports.outputs.PORTS_TO_BUILD }}
