@@ -315,6 +315,7 @@ jobs:
         with:
           name: logs-${{ env.SAFE_PORT_NAME }}
           path: logs/
+          overwrite: true
 
       - name: rename packages.built to packages
         if: success() || failure()
@@ -333,6 +334,7 @@ jobs:
         with:
           name: packages-${{ env.SAFE_PORT_NAME }}
           path: packages/
+          overwrite: true
 
       - name: upload ccache cache
         if: success() || failure()
@@ -340,3 +342,4 @@ jobs:
         with:
           name: ccache-${{ env.SAFE_PORT_NAME }}
           path: ccache
+          overwrite: true
